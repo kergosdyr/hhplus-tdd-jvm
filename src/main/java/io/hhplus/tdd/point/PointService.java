@@ -28,7 +28,7 @@ public class PointService {
 		return pointHistoryRepo.selectAllByUserId(id);
 	}
 
-	public UserPoint charge(long id, long amount, long chargedAt) {
+	public synchronized UserPoint charge(long id, long amount, long chargedAt) {
 		var userPoint = userPointRepo.selectById(id);
 		if (userPoint.point() + amount > MAX_POINT) {
 			throw new IllegalArgumentException("포인트가 최대 잔고를 초과하였습니다");
@@ -39,7 +39,7 @@ public class PointService {
 		return chargedUserPoint;
 	}
 
-	public UserPoint use(long id, long amount, long usedAt) {
+	public synchronized UserPoint use(long id, long amount, long usedAt) {
 		var userPoint = userPointRepo.selectById(id);
 		if (userPoint.point() < amount) {
 			throw new IllegalArgumentException("포인트가 부족합니다");
