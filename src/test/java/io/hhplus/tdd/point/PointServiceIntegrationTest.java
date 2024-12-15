@@ -210,4 +210,39 @@ class PointServiceIntegrationTest extends ServiceIntegrationTest {
 			.isEqualTo(expected);
 	}
 
+	@Test
+	@DisplayName("동시에 10개의 충전과 1개의 사용이 오는 경우에도 순서대로 처리되어야한다")
+	void orderEnforcedTest() throws InterruptedException {
+
+		int chargeThreads = 10;
+		int chargeAmount = 1000;
+		int useAmount = TEST_INIT_AMOUNT + chargeAmount * chargeThreads;
+
+		ExecutorService executor = Executors.newFixedThreadPool(chargeThreads + 1);
+		CountDownLatch doneLatch = new CountDownLatch(chargeThreads + 1);
+
+		for (int i = 0; i < chargeThreads; i++) {
+			executor.submit(() -> {
+				try {
+					pointService.charge(USER_ID, chargeAmount, System.currentTimeMillis());
+				} finally {
+					doneLatch.countDown();
+				}
+			});
+		}
+
+		executor.submit(() -> {
+			try {
+				pointService.use(USER_ID, useAmount, System.currentTimeMillis());
+			} finally {
+				doneLatch.countDown();
+			}
+		});
+
+		doneLatch.await();
+		executor.shutdown();
+
+		assertThat(pointService.get(USER_ID).point()).isEqualTo(0);
+	}
+
 }
