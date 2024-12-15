@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -102,6 +105,109 @@ class PointServiceIntegrationTest extends ServiceIntegrationTest {
 				pointHistory -> pointHistory.userId() == USER_ID && pointHistory.updateMillis() == usedAt
 					&& pointHistory.type().equals(TransactionType.USE) && pointHistory.amount() == 5000)
 			.hasSizeGreaterThanOrEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("10개의 스레드로 동시에 충전을 한 경우 10번에 해당하는 포인트가 증가하여야한다")
+	void concurrencyChargeOnlyTest() throws InterruptedException {
+		long userId = USER_ID;
+		int threadCount = 10;
+		int chargeAmount = 100; // 한번 충전 시 100 증가
+
+		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+		CountDownLatch doneLatch = new CountDownLatch(threadCount);
+
+		// 스레드 시작. 여기서는 동시에 시작을 강제하지 않고 그냥 바로 실행
+		for (int i = 0; i < threadCount; i++) {
+			executor.submit(() -> {
+				try {
+					pointService.charge(userId, chargeAmount, System.currentTimeMillis());
+				} finally {
+					doneLatch.countDown();
+				}
+			});
+		}
+
+		doneLatch.await();
+		executor.shutdown();
+
+		long expected = TEST_INIT_AMOUNT + (threadCount * chargeAmount);
+		long actual = pointService.get(userId).point();
+
+		assertThat(actual)
+			.as("charge 전용 동시 작업 후 포인트가 예상치와 다릅니다.")
+			.isEqualTo(expected);
+	}
+
+	@Test
+	@DisplayName("10개의 스레드로 동시에 사용한 경우 10번에 해당하는 포인트가 사용되어야한다")
+	void concurrencyUseOnlyTest() throws InterruptedException {
+		long userId = USER_ID;
+
+		int threadCount = 10;
+		int useAmount = 50;
+
+		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+		CountDownLatch doneLatch = new CountDownLatch(threadCount);
+
+		for (int i = 0; i < threadCount; i++) {
+			executor.submit(() -> {
+				try {
+					pointService.use(userId, useAmount, System.currentTimeMillis());
+				} finally {
+					doneLatch.countDown();
+				}
+			});
+		}
+		doneLatch.await();
+		executor.shutdown();
+
+		long expectedFinal = TEST_INIT_AMOUNT - (threadCount * useAmount);
+		long actualFinal = pointService.get(userId).point();
+
+		assertThat(actualFinal)
+			.as("use 전용 동시 작업 후 포인트가 예상치와 다릅니다.")
+			.isEqualTo(expectedFinal);
+	}
+
+	@Test
+	@DisplayName("10개의 스레드 중 5개는 충전, 5개는 사용하는 경우 원래의 값과 같아야한다")
+	void concurrencyChargeAndUseTest() throws InterruptedException {
+		long userId = USER_ID;
+
+		int threadCount = 10;
+		int chargeAmount = 50;
+		int useAmount = 50;
+
+		int chargeThreadCount = 5;
+		int useThreadCount = 5;
+
+		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+		CountDownLatch doneLatch = new CountDownLatch(threadCount);
+
+		for (int i = 0; i < threadCount; i++) {
+			final int idx = i;
+			executor.submit(() -> {
+				try {
+					if (idx < chargeThreadCount) {
+						pointService.charge(userId, chargeAmount, System.currentTimeMillis());
+					} else {
+						pointService.use(userId, useAmount, System.currentTimeMillis());
+					}
+				} finally {
+					doneLatch.countDown();
+				}
+			});
+		}
+		doneLatch.await();
+		executor.shutdown();
+
+		long expected = TEST_INIT_AMOUNT + (chargeThreadCount * chargeAmount) - (useThreadCount * useAmount);
+		long actual = pointService.get(userId).point();
+
+		assertThat(actual)
+			.as("charge/use 혼합 동시 작업 후 포인트가 예상치와 다릅니다.")
+			.isEqualTo(expected);
 	}
 
 }
