@@ -4,6 +4,7 @@ import static io.hhplus.tdd.point.TransactionType.CHARGE;
 import static io.hhplus.tdd.point.TransactionType.USE;
 
 import java.util.List;
+import java.util.concurrent.Semaphore;
 
 import org.springframework.stereotype.Service;
 
@@ -18,6 +19,8 @@ public class PointService {
 	public static final int MAX_POINT = 1_000_000;
 	private final UserPointTable userPointRepo;
 
+	private final Semaphore semaphore = new Semaphore(1, true);
+
 	private final PointHistoryTable pointHistoryRepo;
 
 	public UserPoint get(long id) {
@@ -28,26 +31,41 @@ public class PointService {
 		return pointHistoryRepo.selectAllByUserId(id);
 	}
 
-	public synchronized UserPoint charge(long id, long amount, long chargedAt) {
-		var userPoint = userPointRepo.selectById(id);
-		if (userPoint.point() + amount > MAX_POINT) {
-			throw new IllegalArgumentException("포인트가 최대 잔고를 초과하였습니다");
-		}
-		var chargedUserPoint = userPointRepo.insertOrUpdate(id, userPoint.point() + amount);
-		pointHistoryRepo.insert(id, amount, CHARGE, chargedAt);
+	public UserPoint charge(long id, long amount, long chargedAt) {
 
-		return chargedUserPoint;
+		try {
+			semaphore.acquire();
+			var userPoint = userPointRepo.selectById(id);
+			if (userPoint.point() + amount > MAX_POINT) {
+				throw new IllegalArgumentException("포인트가 최대 잔고를 초과하였습니다");
+			}
+			var chargedUserPoint = userPointRepo.insertOrUpdate(id, userPoint.point() + amount);
+			pointHistoryRepo.insert(id, amount, CHARGE, chargedAt);
+
+			return chargedUserPoint;
+		} catch (InterruptedException e) {
+			throw new RuntimeException(e);
+		} finally {
+			semaphore.release();
+		}
 	}
 
-	public synchronized UserPoint use(long id, long amount, long usedAt) {
-		var userPoint = userPointRepo.selectById(id);
-		if (userPoint.point() < amount) {
-			throw new IllegalArgumentException("포인트가 부족합니다");
-		}
-		UserPoint usedUserPoint = userPointRepo.insertOrUpdate(id, userPoint.point() - amount);
-		pointHistoryRepo.insert(id, amount, USE, usedAt);
+	public UserPoint use(long id, long amount, long usedAt) {
+		try {
+			semaphore.acquire();
+			var userPoint = userPointRepo.selectById(id);
+			if (userPoint.point() < amount) {
+				throw new IllegalArgumentException("포인트가 부족합니다");
+			}
+			UserPoint usedUserPoint = userPointRepo.insertOrUpdate(id, userPoint.point() - amount);
+			pointHistoryRepo.insert(id, amount, USE, usedAt);
 
-		return usedUserPoint;
+			return usedUserPoint;
+		} catch (InterruptedException e) {
+			throw new RuntimeException(e);
+		} finally {
+			semaphore.release();
+		}
 	}
 
 }
