@@ -4,7 +4,8 @@ import static io.hhplus.tdd.point.TransactionType.CHARGE;
 import static io.hhplus.tdd.point.TransactionType.USE;
 
 import java.util.List;
-import java.util.concurrent.Semaphore;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.springframework.stereotype.Service;
 
@@ -19,7 +20,8 @@ public class PointService {
 	public static final int MAX_POINT = 1_000_000;
 	private final UserPointTable userPointRepo;
 
-	private final Semaphore semaphore = new Semaphore(1, true);
+	private final Lock lock = new ReentrantLock(true);
+
 
 	private final PointHistoryTable pointHistoryRepo;
 
@@ -34,7 +36,7 @@ public class PointService {
 	public UserPoint charge(long id, long amount, long chargedAt) {
 
 		try {
-			semaphore.acquire();
+			lock.lock();
 			var userPoint = userPointRepo.selectById(id);
 			if (userPoint.point() + amount > MAX_POINT) {
 				throw new IllegalArgumentException("포인트가 최대 잔고를 초과하였습니다");
@@ -43,16 +45,14 @@ public class PointService {
 			pointHistoryRepo.insert(id, amount, CHARGE, chargedAt);
 
 			return chargedUserPoint;
-		} catch (InterruptedException e) {
-			throw new RuntimeException(e);
 		} finally {
-			semaphore.release();
+			lock.unlock();
 		}
 	}
 
 	public UserPoint use(long id, long amount, long usedAt) {
 		try {
-			semaphore.acquire();
+			lock.lock();
 			var userPoint = userPointRepo.selectById(id);
 			if (userPoint.point() < amount) {
 				throw new IllegalArgumentException("포인트가 부족합니다");
@@ -61,10 +61,8 @@ public class PointService {
 			pointHistoryRepo.insert(id, amount, USE, usedAt);
 
 			return usedUserPoint;
-		} catch (InterruptedException e) {
-			throw new RuntimeException(e);
 		} finally {
-			semaphore.release();
+			lock.unlock();
 		}
 	}
 
