@@ -73,4 +73,7 @@
 
 ## 요구사항 구현
 
-- 위에서 언급한 대로, 주어진 요구사항을 구현하기 위해서는 Mutex 가 필수적이기 때문에 `Synchronized`, `ReentrantLock` 
+- 위에서 언급한 대로, 주어진 요구사항을 구현하기 위해서는 Mutex 가 필수적이기 때문에 `Synchronized`, `ReentrantLock` 을 사용해서 구현해야함
+- 이중에 `순서대로`를 구현하기 위해서는 `Synchronized` 보다는 `ReentrantLock` 으로 구현하는 것이 올바르다 판단함
+- `Semaphore` 의 허용량 1인 세마포어를 구현하는 경우에 뮤텍스라고 표현할 수 있으나 주어진 문제는 ReentrantLock 을 사용하는것이 좀더 맞다 생각함
+- 따라서 `ReentrantLock` 으로 요구사항을 구현하였음 
