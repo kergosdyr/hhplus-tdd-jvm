@@ -21,7 +21,9 @@ class PointServiceUnitTest {
 
 	PointHistoryTable pointHistoryRepo = new PointHistoryTable();
 
-	PointService pointService = new PointService(userPointRepo, pointHistoryRepo);
+	PointLockProvider pointLockProvider = new PointLockProvider();
+
+	PointService pointService = new PointService(userPointRepo, pointLockProvider, pointHistoryRepo);
 
 	@BeforeEach
 	void setUp() {
