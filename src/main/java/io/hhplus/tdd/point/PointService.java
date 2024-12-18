@@ -4,7 +4,6 @@ import static io.hhplus.tdd.point.TransactionType.CHARGE;
 import static io.hhplus.tdd.point.TransactionType.USE;
 
 import java.util.List;
-import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.springframework.stereotype.Service;
@@ -20,7 +19,7 @@ public class PointService {
 	public static final int MAX_POINT = 1_000_000;
 	private final UserPointTable userPointRepo;
 
-	private final Lock lock = new ReentrantLock(true);
+	private final PointLockProvider lockProvider;
 
 
 	private final PointHistoryTable pointHistoryRepo;
@@ -34,6 +33,8 @@ public class PointService {
 	}
 
 	public UserPoint charge(long id, long amount, long chargedAt) {
+
+		ReentrantLock lock = lockProvider.provide();
 
 		try {
 			lock.lock();
@@ -51,6 +52,8 @@ public class PointService {
 	}
 
 	public UserPoint use(long id, long amount, long usedAt) {
+		ReentrantLock lock = lockProvider.provide();
+
 		try {
 			lock.lock();
 			var userPoint = userPointRepo.selectById(id);
