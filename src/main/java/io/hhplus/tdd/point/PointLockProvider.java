@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class PointLockProvider {
 
-	private final ReentrantLock lock = new ReentrantLock();
+	private final ReentrantLock lock = new ReentrantLock(true);
 
 	public ReentrantLock provide() {
 		return lock;
